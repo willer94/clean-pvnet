@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File              : run.py
+# Author            : WangZi
+# Date              : 14.04.2020
+# Last Modified Date: 14.04.2020
+# Last Modified By  : WangZi
 from lib.config import cfg, args
 import numpy as np
 import os
