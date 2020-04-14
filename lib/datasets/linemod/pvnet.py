@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File              : pvnet.py
+# Author            : WangZi
+# Date              : 14.04.2020
+# Last Modified Date: 14.04.2020
+# Last Modified By  : WangZi
 import torch.utils.data as data
 from pycocotools.coco import COCO
 import numpy as np
@@ -13,7 +20,7 @@ from lib.config import cfg
 
 class Dataset(data.Dataset):
 
-    def __init__(self, ann_file, data_root, split, transforms=None):
+    def __init__(self, ann_file, data_root, split, transforms=None, spherical=False):
         super(Dataset, self).__init__()
 
         self.data_root = data_root
@@ -23,6 +30,12 @@ class Dataset(data.Dataset):
         self.img_ids = np.array(sorted(self.coco.getImgIds()))
         self._transforms = transforms
         self.cfg = cfg
+
+        self.spherical = spherical
+        if not spherical:
+            self.compute_vertex =  pvnet_data_utils.compute_vertex
+        else:
+            self.compute_vertex = pvnet_data_utils.compute_vertex_spherical
 
     def read_data(self, img_id):
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
@@ -50,9 +63,15 @@ class Dataset(data.Dataset):
         if self._transforms is not None:
             inp, kpt_2d, mask = self._transforms(inp, kpt_2d, mask)
 
-        vertex = pvnet_data_utils.compute_vertex(mask, kpt_2d).transpose(2, 0, 1)
-        ret = {'inp': inp, 'mask': mask.astype(np.uint8), 'vertex': vertex, 'img_id': img_id, 'meta': {}}
-        # visualize_utils.visualize_linemod_ann(torch.tensor(inp), kpt_2d, mask, True)
+        if not self.spherical:
+            vertex = self.compute_vertex(mask, kpt_2d).transpose(2, 0, 1)
+            ret = {'inp': inp, 'mask': mask.astype(np.uint8), 'vertex': vertex, 'img_id': img_id, 'meta': {}}
+            # visualize_utils.visualize_linemod_ann(torch.tensor(inp), kpt_2d, mask, True)
+        else:
+            vertex_abs , vertex_sign = self.compute_vertex(mask, kpt_2d)
+            vertex_abs, vertex_sign = vertex_abs.transpose(2, 0, 1), vertex_sign.transpose(2, 0, 1)
+            ret = {'inp': inp, 'mask': mask.astype(np.uint8), 'vertex_abs': vertex_abs,
+                   'vertex_sign': vertex_sign, 'img_id': img_id, 'meta': {}}
 
         return ret
 

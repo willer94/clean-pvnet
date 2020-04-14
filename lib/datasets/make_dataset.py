@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File              : make_dataset.py
+# Author            : WangZi
+# Date              : 14.04.2020
+# Last Modified Date: 14.04.2020
+# Last Modified By  : WangZi
 from .transforms import make_transforms
 from . import samplers
 from .dataset_catalog import DatasetCatalog
@@ -25,6 +32,7 @@ def make_dataset(cfg, dataset_name, transforms, is_train=True):
     data_source = args['id']
     dataset = _dataset_factory(data_source, cfg.task)
     del args['id']
+    args['spherical'] = cfg.loss != 'norm'
     if data_source in ['linemod', 'custom']:
         args['transforms'] = transforms
         args['split'] = 'train' if is_train == True else 'test'

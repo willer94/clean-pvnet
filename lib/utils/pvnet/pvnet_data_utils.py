@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File              : pvnet_data_utils.py
+# Author            : WangZi
+# Date              : 14.04.2020
+# Last Modified Date: 14.04.2020
+# Last Modified By  : WangZi
 import pycocotools.mask as mask_utils
 import numpy as np
 from plyfile import PlyData
@@ -42,6 +49,24 @@ def compute_vertex(mask, kpt_2d):
     vertex_out = np.reshape(vertex_out, [h, w, m * 2])
 
     return vertex_out
+
+
+def compute_vertex_spherical(mask, kpt_2d):
+    h, w = mask.shape
+    m = kpt_2d.shape[0]
+    xy = np.argwhere(mask == 1)[:, [1, 0]]
+
+    vertex = kpt_2d[None] - xy[:, None]
+
+    vertex_abs = np.zeros([h, w, m, 2], np.float32)
+    vertex_abs[xy[:, 1], xy[:, 0]] = np.abs(vertex)
+    vertex_abs = np.reshape(vertex_abs, [h, w, m * 2])
+
+    vertex_sign = np.zeros([h, w, m, 2], np.float32)
+    vertex_sign[xy[:, 1], xy[:, 0]] = np.sign(vertex)
+    vertex_sign = np.reshape(vertex_sign, [h, w, m * 2])
+
+    return vertex_abs, vertex_sign
 
 
 def get_ply_model(model_path):

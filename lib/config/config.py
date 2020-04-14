@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File              : config.py
+# Author            : WangZi
+# Date              : 14.04.2020
+# Last Modified Date: 14.04.2020
+# Last Modified By  : WangZi
 from yacs.config import CfgNode as CN
 import argparse
 import os
@@ -17,6 +24,9 @@ cfg.heads = ''
 
 # task
 cfg.task = ''
+
+# loss type
+cfg.loss = 'norm'
 
 # gpus
 cfg.gpus = [0, 1, 2, 3]
