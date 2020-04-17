@@ -3,7 +3,7 @@
 # File              : pvnet_data_utils.py
 # Author            : WangZi
 # Date              : 14.04.2020
-# Last Modified Date: 14.04.2020
+# Last Modified Date: 15.04.2020
 # Last Modified By  : WangZi
 import pycocotools.mask as mask_utils
 import numpy as np
@@ -63,8 +63,9 @@ def compute_vertex_spherical(mask, kpt_2d):
     vertex_abs = np.reshape(vertex_abs, [h, w, m * 2])
 
     vertex_sign = np.zeros([h, w, m, 2], np.float32)
-    vertex_sign[xy[:, 1], xy[:, 0]] = np.sign(vertex)
-    vertex_sign = np.reshape(vertex_sign, [h, w, m * 2])
+    vertex_sign[xy[:, 1], xy[:, 0]] = (np.sign(vertex) + 1) / 2
+    vertex_sign = vertex_sign[...,0] * 2 + vertex_sign[..., 1]
+    vertex_sign = vertex_sign.astype(np.int)
 
     return vertex_abs, vertex_sign
 

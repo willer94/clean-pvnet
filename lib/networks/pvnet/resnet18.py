@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# File              : resnet18.py
+# Author            : WangZi
+# Date              : 15.04.2020
+# Last Modified Date: 15.04.2020
+# Last Modified By  : WangZi
 from torch import nn
 import torch
 from torch.nn import functional as F
@@ -6,8 +13,17 @@ from lib.csrc.ransac_voting.ransac_voting_gpu import ransac_voting_layer, ransac
 from lib.config import cfg
 
 
+def spherical_exp(a):
+    """
+    a: Bx...xn (Bxn) or (BxHxWxn) or (BxHxWxPxn) tensors
+    return as a
+    """
+    a_exp = a.exp()
+    return a_exp / torch.sum(a_exp**2, dim=-1, keepdim=True)
+
+
 class Resnet18(nn.Module):
-    def __init__(self, ver_dim, seg_dim, fcdim=256, s8dim=128, s4dim=64, s2dim=32, raw_dim=32):
+    def __init__(self, ver_dim, seg_dim, spherical_used=False, fcdim=256, s8dim=128, s4dim=64, s2dim=32, raw_dim=32):
         super(Resnet18, self).__init__()
 
         # Load the pretrained weights, remove avg pool
@@ -19,6 +35,7 @@ class Resnet18(nn.Module):
 
         self.ver_dim=ver_dim
         self.seg_dim=seg_dim
+        self.spherical_used = spherical_used
 
         # Randomly initialize the 1x1 Conv scoring layer
         resnet18_8s.fc = nn.Sequential(
@@ -54,8 +71,15 @@ class Resnet18(nn.Module):
             nn.Conv2d(3+s2dim, raw_dim, 3, 1, 1, bias=False),
             nn.BatchNorm2d(raw_dim),
             nn.LeakyReLU(0.1,True),
-            nn.Conv2d(raw_dim, seg_dim+ver_dim, 1, 1)
+            nn.Conv2d(raw_dim, seg_dim + ver_dim, 1, 1)
         )
+        if self.spherical_used:
+            self.convsign = nn.Sequential(
+                nn.Conv2d(3+s2dim, raw_dim, 3, 1, 1, bias=False),
+                nn.BatchNorm2d(raw_dim),
+                nn.LeakyReLU(0.1,True),
+                nn.Conv2d(raw_dim, ver_dim*2, 1, 1) # N * 4, label have 4 dims
+            )
         self.up2storaw = nn.UpsamplingBilinear2d(scale_factor=2)
 
     def _normal_initialization(self, layer):
@@ -75,6 +99,26 @@ class Resnet18(nn.Module):
             kpt_2d = ransac_voting_layer_v3(mask, vertex, 128, inlier_thresh=0.99, max_num=100)
             output.update({'mask': mask, 'kpt_2d': kpt_2d})
 
+    def decode_keypoint_spherical(self, output):
+        vertex_abs  = output['vertex_abs'].permute(0, 2, 3, 1)
+        vertex_sign = output['vertex_sign'].permute(0, 2, 3, 1)
+        b, h, w, vn_2 = vertex_abs.shape
+        vertex_abs = vertex_abs.view(b, h, w, vn_2//2, 2)
+        vertex_abs = spherical_exp(vertex_abs)
+        vertex_sign = vertex_sign.view(b, h, w, vn_2//2, 4)
+        vertex_sign_label = torch.argmax(vertex_sign, dim=-1)
+        vertex_sign = torch.stack((vertex_sign_label//2, vertex_sign_label%2), dim=-1) * 2 - 1
+        vertex = vertex_abs * vertex_sign
+        mask = torch.argmax(output['seg'], 1)
+        if cfg.test.un_pnp:
+            mean = ransac_voting_layer_v3(mask, vertex, 512, inlier_thresh=0.99)
+            kpt_2d, var = estimate_voting_distribution_with_mean(mask, vertex, mean)
+            output.update({'mask': mask, 'kpt_2d': kpt_2d, 'var': var})
+        else:
+            kpt_2d = ransac_voting_layer_v3(mask, vertex, 128, inlier_thresh=0.99, max_num=100)
+            output.update({'mask': mask, 'kpt_2d': kpt_2d})
+
+
     def forward(self, x, feature_alignment=False):
         x2s, x4s, x8s, x16s, x32s, xfc = self.resnet18_8s(x)
 
@@ -89,15 +133,27 @@ class Resnet18(nn.Module):
         fm=self.conv2s(torch.cat([fm,x2s],1))
         fm=self.up2storaw(fm)
 
-        x=self.convraw(torch.cat([fm,x],1))
-        seg_pred=x[:,:self.seg_dim,:,:]
-        ver_pred=x[:,self.seg_dim:,:,:]
+        fm = torch.cat([fm,x],1)
+        x=self.convraw(fm)
 
-        ret = {'seg': seg_pred, 'vertex': ver_pred}
+        if not self.spherical_used:
+            seg_pred=x[:,:self.seg_dim,:,:]
+            ver_pred=x[:,self.seg_dim:,:,:]
 
-        if not self.training:
-            with torch.no_grad():
-                self.decode_keypoint(ret)
+            ret = {'seg': seg_pred, 'vertex': ver_pred}
+
+            if not self.training:
+                with torch.no_grad():
+                    self.decode_keypoint(ret)
+        else:
+            seg_pred = x[:,:self.seg_dim,:,:]
+            ver_abs  = x[:,self.seg_dim:,:,:]
+            ver_sign = self.convsign(fm)
+            ret = {'seg': seg_pred, 'vertex_abs': ver_abs, 'vertex_sign': ver_sign}
+
+            if not self.training:
+                with torch.no_grad():
+                    self.decode_keypoint_spherical(ret)
 
         return ret
 
