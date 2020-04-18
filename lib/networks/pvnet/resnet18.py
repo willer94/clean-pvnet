@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# File              : resnet18.py
-# Author            : WangZi
-# Date              : 15.04.2020
-# Last Modified Date: 15.04.2020
-# Last Modified By  : WangZi
 from torch import nn
 import torch
 from torch.nn import functional as F
@@ -108,7 +101,7 @@ class Resnet18(nn.Module):
         vertex_sign = vertex_sign.view(b, h, w, vn_2//2, 4)
         vertex_sign_label = torch.argmax(vertex_sign, dim=-1)
         vertex_sign = torch.stack((vertex_sign_label//2, vertex_sign_label%2), dim=-1) * 2 - 1
-        vertex = vertex_abs * vertex_sign
+        vertex = vertex_abs * vertex_sign.to(device=vertex_sign.device, dtype=torch.float32)
         mask = torch.argmax(output['seg'], 1)
         if cfg.test.un_pnp:
             mean = ransac_voting_layer_v3(mask, vertex, 512, inlier_thresh=0.99)
@@ -158,7 +151,7 @@ class Resnet18(nn.Module):
         return ret
 
 
-def get_res_pvnet(ver_dim, seg_dim):
-    model = Resnet18(ver_dim, seg_dim)
+def get_res_pvnet(ver_dim, seg_dim, spherical_used=False):
+    model = Resnet18(ver_dim, seg_dim, spherical_used)
     return model
 

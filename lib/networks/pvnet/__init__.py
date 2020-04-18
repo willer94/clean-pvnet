@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# File              : __init__.py
-# Author            : WangZi
-# Date              : 15.04.2020
-# Last Modified Date: 15.04.2020
-# Last Modified By  : WangZi
 from .resnet18  import get_res_pvnet
 
 
