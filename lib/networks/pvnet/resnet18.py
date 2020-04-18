@@ -98,10 +98,11 @@ class Resnet18(nn.Module):
         b, h, w, vn_2 = vertex_abs.shape
         vertex_abs = vertex_abs.view(b, h, w, vn_2//2, 2)
         vertex_abs = spherical_exp(vertex_abs)
+        # pr1, pr2 = pr[..., :2], pr[..., 2:]
+        # pr1, pr2 = torch.softmax(pr1, dim=-1), torch.softmax(pr2, dim=-1)
         vertex_sign = vertex_sign.view(b, h, w, vn_2//2, 4)
-        vertex_sign1, vertex_sign2 = vertex_sign[..., 0], vertex_sign[..., 1]
+        vertex_sign1, vertex_sign2 = vertex_sign[..., :2], vertex_sign[..., 2:]
         vertex_sign1, vertex_sign2 = torch.argmax(vertex_sign1, -1), torch.argmax(vertex_sign2, -1)
-        vertex_sign1, vertex_sign2 = vertex_sign1 * 2 - 1, vertex_sign2 * 2 - 1
         vertex_sign = torch.stack((vertex_sign1, vertex_sign2), dim=-1) * 2 - 1
         vertex = vertex_abs * vertex_sign.to(device=vertex_sign.device, dtype=torch.float32)
         mask = torch.argmax(output['seg'], 1)

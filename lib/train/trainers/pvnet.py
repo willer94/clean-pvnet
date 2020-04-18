@@ -41,8 +41,8 @@ def spherical_sign_loss(pr, gt):
     pr1, pr2 = pr[..., :2], pr[..., 2:]
     pr1, pr2 = torch.softmax(pr1, dim=-1), torch.softmax(pr2, dim=-1)
     gt1, gt2 = gt[..., 0], gt[..., 1]
-    l1 = torch.nn.functional.cross_entropy(pr1, gt1, reduce='sum')
-    l2 = torch.nn.functional.cross_entropy(pr2, gt2, reduce='sum')
+    l1 = torch.nn.functional.cross_entropy(pr1.view(-1, 2), gt1.flatten(), reduce='sum')
+    l2 = torch.nn.functional.cross_entropy(pr2.view(-1, 2), gt2.flatten(), reduce='sum')
     return l1 + l2
     
     # pr = pr.permute(0, 2, 3, 1).contiguous()
