@@ -36,10 +36,11 @@ def spherical_sign_loss(pr, gt):
     gt: tensors Bx(PointNum)xHxW 0,1,2,3
     """
     pr = pr.permute(0, 2, 3, 1).contiguous()
+    gt = gt.permute(0, 2, 3, 1).contiguous()
     b, h, w, vn_4 = pr.shape
     pr = pr.view(b, h, w, vn_4 // 4, 4)
+    gt = gt.view(b, h, w, vn_4 // 4, 2)
     pr1, pr2 = pr[..., :2], pr[..., 2:]
-    pr1, pr2 = torch.softmax(pr1, dim=-1), torch.softmax(pr2, dim=-1)
     gt1, gt2 = gt[..., 0], gt[..., 1]
     l1 = torch.nn.functional.cross_entropy(pr1.view(-1, 2), gt1.flatten(), reduce='sum')
     l2 = torch.nn.functional.cross_entropy(pr2.view(-1, 2), gt2.flatten(), reduce='sum')

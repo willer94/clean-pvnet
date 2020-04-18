@@ -45,9 +45,7 @@ cfg.eval_ep = 5
 # -----------------------------------------------------------------------------
 cfg.train = CN()
 
-cfg.train.dataset = 'CocoTrain'
-cfg.train.epoch = 140
-cfg.train.num_workers = 8
+cfg.train.num_workers = 0
 
 # use adam as default
 cfg.train.optim = 'adam'
