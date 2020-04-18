@@ -24,7 +24,7 @@ def spherical_abs_loss(pr, gt_sign, gt_abs):
     pr = spherical_exp(pr)
     # pr.view(b, h, w, -1)
     # pr = pr.permute(0, 3, 1, 2)
-    gt_abs = gt_abs.permute(0, 2, 3, 1).contiguous()
+    # gt_abs = gt_abs.permute(0, 2, 3, 1).contiguous()
     gt_abs = gt_abs.view(-1, 2)
     
     return torch.sum(torch.abs(pr[:, 0]*gt_abs[:, 1] - pr[:, 1]*gt_abs[:, 0]))
@@ -38,12 +38,22 @@ def spherical_sign_loss(pr, gt):
     pr = pr.permute(0, 2, 3, 1).contiguous()
     b, h, w, vn_4 = pr.shape
     pr = pr.view(b, h, w, vn_4 // 4, 4)
-    pr = pr.view(-1, 4)
-    pr = torch.softmax(pr, -1)
-    gt = gt.permute(0, 2, 3, 1).contiguous()
-    # gt = gt.view(-1, vn_4//4)
-    gt = gt.flatten()
-    return torch.nn.functional.cross_entropy(pr, gt, reduction='sum')
+    pr1, pr2 = pr[..., :2], pr[..., 2:]
+    pr1, pr2 = torch.softmax(pr1, dim=-1), torch.softmax(pr2, dim=-1)
+    gt1, gt2 = gt[..., 0], gt[..., 1]
+    l1 = torch.nn.functional.cross_entropy(pr1, gt1, reduce='sum')
+    l2 = torch.nn.functional.cross_entropy(pr2, gt2, reduce='sum')
+    return l1 + l2
+    
+    # pr = pr.permute(0, 2, 3, 1).contiguous()
+    # b, h, w, vn_4 = pr.shape
+    # pr = pr.view(b, h, w, vn_4 // 4, 4)
+    # pr = pr.view(-1, 4)
+    # pr = torch.softmax(pr, -1)
+    # gt = gt.permute(0, 2, 3, 1).contiguous()
+    # # gt = gt.view(-1, vn_4//4)
+    # gt = gt.flatten()
+    # return torch.nn.functional.cross_entropy(pr, gt, reduction='sum')
 
 
 class NetworkWrapper(nn.Module):

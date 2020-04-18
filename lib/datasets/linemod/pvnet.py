@@ -62,7 +62,7 @@ class Dataset(data.Dataset):
             # visualize_utils.visualize_linemod_ann(torch.tensor(inp), kpt_2d, mask, True)
         else:
             vertex_abs , vertex_sign = self.compute_vertex(mask, kpt_2d)
-            vertex_abs, vertex_sign = vertex_abs.transpose(2, 0, 1), vertex_sign.transpose(2, 0, 1)
+            # vertex_abs, vertex_sign = vertex_abs.transpose(2, 0, 1), vertex_sign.transpose(2, 0, 1)
             ret = {'inp': inp, 'mask': mask.astype(np.uint8), 'vertex_abs': vertex_abs,
                    'vertex_sign': vertex_sign, 'img_id': img_id, 'meta': {}}
 
