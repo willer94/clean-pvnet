@@ -64,8 +64,8 @@ def compute_vertex_spherical(mask, kpt_2d):
 
     vertex_sign = np.zeros([h, w, m, 2], np.float32)
     vertex_sign[xy[:, 1], xy[:, 0]] = (np.sign(vertex) + 1) / 2
+    # vertex_sign[xy[:, 1], xy[:, 0]] = np.sign(vertex)
     vertex_sign = vertex_sign.astype(np.int)
-    vertex_sign = np.reshape(vertex_sign, [h, w, m * 2])
 
     return vertex_abs, vertex_sign
 

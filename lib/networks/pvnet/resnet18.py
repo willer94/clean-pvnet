@@ -12,7 +12,7 @@ def spherical_exp(a):
     return as a
     """
     a_exp = a.exp()
-    return a_exp / torch.sum(a_exp**2, dim=-1, keepdim=True)
+    return a_exp / torch.sqrt(torch.sum(a_exp**2, dim=-1, keepdim=True))
 
 
 class Resnet18(nn.Module):
@@ -67,11 +67,17 @@ class Resnet18(nn.Module):
             nn.Conv2d(raw_dim, seg_dim + ver_dim, 1, 1)
         )
         if self.spherical_used:
-            self.convsign = nn.Sequential(
+            self.convsignX = nn.Sequential(
                 nn.Conv2d(3+s2dim, raw_dim, 3, 1, 1, bias=False),
                 nn.BatchNorm2d(raw_dim),
                 nn.LeakyReLU(0.1,True),
-                nn.Conv2d(raw_dim, ver_dim*2, 1, 1) # N * 4, label have 4 dims
+                nn.Conv2d(raw_dim, ver_dim, 1, 1) # N * 4, label have 4 dims
+            )
+            self.convsignY = nn.Sequential(
+                nn.Conv2d(3+s2dim, raw_dim, 3, 1, 1, bias=False),
+                nn.BatchNorm2d(raw_dim),
+                nn.LeakyReLU(0.1,True),
+                nn.Conv2d(raw_dim, ver_dim, 1, 1) # N * 4, label have 4 dims
             )
         self.up2storaw = nn.UpsamplingBilinear2d(scale_factor=2)
 
@@ -94,17 +100,19 @@ class Resnet18(nn.Module):
 
     def decode_keypoint_spherical(self, output):
         vertex_abs  = output['vertex_abs'].permute(0, 2, 3, 1)
-        vertex_sign = output['vertex_sign'].permute(0, 2, 3, 1)
+        vertex_signX = output['vertex_signX'].permute(0, 2, 3, 1)
+        vertex_signY = output['vertex_signY'].permute(0, 2, 3, 1)
         b, h, w, vn_2 = vertex_abs.shape
         vertex_abs = vertex_abs.view(b, h, w, vn_2//2, 2)
         vertex_abs = spherical_exp(vertex_abs)
-        # pr1, pr2 = pr[..., :2], pr[..., 2:]
-        # pr1, pr2 = torch.softmax(pr1, dim=-1), torch.softmax(pr2, dim=-1)
-        vertex_sign = vertex_sign.view(b, h, w, vn_2//2, 4)
-        vertex_sign1, vertex_sign2 = vertex_sign[..., :2], vertex_sign[..., 2:]
-        vertex_sign1, vertex_sign2 = torch.argmax(vertex_sign1, -1), torch.argmax(vertex_sign2, -1)
-        vertex_sign = torch.stack((vertex_sign1, vertex_sign2), dim=-1) * 2 - 1
-        vertex = vertex_abs * vertex_sign.to(device=vertex_sign.device, dtype=torch.float32)
+
+        vertex_signX, vertex_signY = vertex_signX.view(b, h, w, vn_2//2, 2), vertex_signY.view(b, h, w, vn_2//2, 2)
+        vertex_signX, vertex_signY = torch.argmax(vertex_signX, -1), torch.argmax(vertex_signY, -1)
+        vertex_sign = torch.stack((vertex_signX, vertex_signY), dim=-1).float() * 2 - 1
+        vertex = vertex_abs * vertex_sign
+        # torch.save(vertex_sign.cpu().detach(), 'vertex_sign.pkl')
+        # torch.save(vertex_abs.cpu().detach(), 'vertex_abs.pkl')
+        # exit()
         mask = torch.argmax(output['seg'], 1)
         if cfg.test.un_pnp:
             mean = ransac_voting_layer_v3(mask, vertex, 512, inlier_thresh=0.99)
@@ -144,8 +152,9 @@ class Resnet18(nn.Module):
         else:
             seg_pred = x[:,:self.seg_dim,:,:]
             ver_abs  = x[:,self.seg_dim:,:,:]
-            ver_sign = self.convsign(fm)
-            ret = {'seg': seg_pred, 'vertex_abs': ver_abs, 'vertex_sign': ver_sign}
+            ver_signX = self.convsignX(fm)
+            ver_signY = self.convsignY(fm)
+            ret = {'seg': seg_pred, 'vertex_abs': ver_abs, 'vertex_signX': ver_signX, 'vertex_signY': ver_signY}
 
             if not self.training:
                 with torch.no_grad():

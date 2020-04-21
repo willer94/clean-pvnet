@@ -7,6 +7,7 @@ task: 'pvnet'
 gpus: (0, 1, 2, 3)
 resume: true
 loss: 'spherical'
+#eval_ep: 1
 
 train:
     optim: 'adam'
@@ -14,7 +15,7 @@ train:
     epoch: 240
     milestones: (20, 40, 60, 80, 100, 120, 160, 180, 200, 220)
     gamma: 0.5
-    batch_size: 24
+    batch_size: 20
     dataset: 'LinemodTrain'
     cropresize_rate: 1.0
     rotate_rate: 1.0

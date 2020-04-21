@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# File              : config.py
-# Author            : WangZi
-# Date              : 14.04.2020
-# Last Modified Date: 14.04.2020
-# Last Modified By  : WangZi
 from yacs.config import CfgNode as CN
 import argparse
 import os
@@ -46,6 +39,8 @@ cfg.eval_ep = 5
 cfg.train = CN()
 
 cfg.train.num_workers = 0
+cfg.train.epoch = 240
+cfg.train.dataset = 'CocoTrain'
 
 # use adam as default
 cfg.train.optim = 'adam'

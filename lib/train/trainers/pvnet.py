@@ -9,7 +9,7 @@ def spherical_exp(a):
     return as a
     """
     a_exp = a.exp()
-    return a_exp / torch.sum(a_exp**2, dim=-1, keepdim=True)
+    return a_exp / torch.sqrt(torch.sum(a_exp**2, dim=-1, keepdim=True))
 
 
 def spherical_abs_loss(pr, gt_sign, gt_abs):
@@ -22,9 +22,7 @@ def spherical_abs_loss(pr, gt_sign, gt_abs):
     b, h, w, vn_2 = pr.shape
     pr = pr.view(-1, 2)
     pr = spherical_exp(pr)
-    # pr.view(b, h, w, -1)
-    # pr = pr.permute(0, 3, 1, 2)
-    # gt_abs = gt_abs.permute(0, 2, 3, 1).contiguous()
+    gt_abs = gt_abs.permute(0, 2, 3, 1).contiguous()
     gt_abs = gt_abs.view(-1, 2)
     
     return torch.sum(torch.abs(pr[:, 0]*gt_abs[:, 1] - pr[:, 1]*gt_abs[:, 0]))
@@ -32,29 +30,22 @@ def spherical_abs_loss(pr, gt_sign, gt_abs):
 
 def spherical_sign_loss(pr, gt):
     """
-    pr: tensors Bx(PointNum*4)xHxW
+    pr: tensors Bx(PointNum*2)xHxW
     gt: tensors Bx(PointNum)xHxW 0,1,2,3
     """
+    # return torch.nn.functional.binary_cross_entropy_with_logits(pr, gt.float(), reduction='sum')
+    # return torch.nn.functional.smooth_l1_loss(pr, gt.float(), reduction='sum')
     pr = pr.permute(0, 2, 3, 1).contiguous()
     gt = gt.permute(0, 2, 3, 1).contiguous()
-    b, h, w, vn_4 = pr.shape
-    pr = pr.view(b, h, w, vn_4 // 4, 4)
-    gt = gt.view(b, h, w, vn_4 // 4, 2)
-    pr1, pr2 = pr[..., :2], pr[..., 2:]
-    gt1, gt2 = gt[..., 0], gt[..., 1]
-    l1 = torch.nn.functional.cross_entropy(pr1.view(-1, 2), gt1.flatten(), reduce='sum')
-    l2 = torch.nn.functional.cross_entropy(pr2.view(-1, 2), gt2.flatten(), reduce='sum')
-    return l1 + l2
-    
-    # pr = pr.permute(0, 2, 3, 1).contiguous()
-    # b, h, w, vn_4 = pr.shape
-    # pr = pr.view(b, h, w, vn_4 // 4, 4)
-    # pr = pr.view(-1, 4)
-    # pr = torch.softmax(pr, -1)
-    # gt = gt.permute(0, 2, 3, 1).contiguous()
-    # # gt = gt.view(-1, vn_4//4)
-    # gt = gt.flatten()
-    # return torch.nn.functional.cross_entropy(pr, gt, reduction='sum')
+    b, h, w, vn_2 = pr.shape
+    pr = pr.view(b, h, w, vn_2 // 2, 2)
+    pr = pr.view(-1, 2)
+    gt = gt.flatten()
+    l = torch.nn.functional.cross_entropy(pr, gt, reduction='sum')
+
+    with torch.no_grad():
+        acc_num = int(gt.eq(torch.argmax(pr, -1)).sum())
+    return l, acc_num
 
 
 class NetworkWrapper(nn.Module):
@@ -70,6 +61,8 @@ class NetworkWrapper(nn.Module):
         else:
             self.vote_abs_crit = spherical_abs_loss
             self.vote_sign_crit = spherical_sign_loss
+            # self.vote_sign_crit = nn.BCEWithLogitsLoss(reduction='sum')
+            # self.vote_sign_crit = nn.CrossEntropyLoss(reduction='sum')
 
     def forward(self, batch):
         output = self.net(batch['inp'])
@@ -94,17 +87,23 @@ class NetworkWrapper(nn.Module):
             loss += seg_loss
         else:
             weight = batch['mask'][:, None].float()
-            vote_abs_loss = self.vote_abs_crit(output['vertex_abs'] * weight, None, batch['vertex_abs'])
+            vote_abs_loss = self.vote_abs_crit(output['vertex_abs'] * weight, None, batch['vertex_abs']*weight)
             vote_abs_loss = vote_abs_loss / weight.sum() / batch['vertex_abs'].size(1) * 10
             scalar_stats.update({'vote_abs_loss': vote_abs_loss})
             loss += vote_abs_loss
 
-            mask = batch['mask'].long()
-            sign_loss = self.vote_sign_crit(output['vertex_sign'] * weight, batch['vertex_sign'])
+            sign_lossX, x_acc = self.vote_sign_crit(output['vertex_signX'] * weight, batch['vertex_signX']*weight.long())
+            sign_lossY, y_acc = self.vote_sign_crit(output['vertex_signY'] * weight, batch['vertex_signY']*weight.long())
+            sign_loss = sign_lossX + sign_lossY
             sign_loss = sign_loss / weight.sum() / batch['vertex_abs'].size(1)
+            x_acc = (x_acc - (weight.numel() - weight.sum())*9) / weight.sum() / 9
+            y_acc = (y_acc - (weight.numel() - weight.sum())*9) / weight.sum() / 9
             scalar_stats.update({'sign_loss': sign_loss})
+            scalar_stats.update({'x_acc': x_acc})
+            scalar_stats.update({'y_acc': y_acc})
             loss += sign_loss
 
+            mask = batch['mask'].long()
             seg_loss = self.seg_crit(output['seg'], mask)
             scalar_stats.update({'seg_loss': seg_loss})
             loss += seg_loss
